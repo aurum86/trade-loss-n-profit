@@ -16,3 +16,10 @@ docker-compose -f docker/docker-compose.yml up
 4. Enjoy the output:
 * in Terminal
 * in csv files in `output` dir.
+
+## Donation
+
+If you like this project, and it helped you to save your precious time,
+please, don't hesitate to donate some of your assets.
+You can donate to these addresses:
+* BITCOIN: bc1qpzgtjrdw04ry2kz9ex6g5ygap3qlp7nx38wgge
