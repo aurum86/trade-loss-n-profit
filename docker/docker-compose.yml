@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  main:
+    container_name: trade_loss_n_profit.local
+    hostname: trade_loss_n_profit.local
+    image: aurum86/trade_loss_n_profit:latest
+    restart: unless-stopped
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ../main.py:/main.py
+      - ../imports:/imports
+      - ../output:/output
+    networks:
+      default:
+        aliases:
+          - trade_loss_n_profit.local

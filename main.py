@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from abc import abstractmethod
 from typing import Optional
 
@@ -232,20 +233,36 @@ class Calculator:
         return pnl
 
 
+def output_to_file(result, file_name):
+    output_path = 'output/kraken/'
+    import os
+    os.makedirs(output_path, 0o777, True)
+    try:
+        os.chmod('output', 0o777)
+        os.chmod(output_path, 0o777)
+    except:
+        pass
+
+    write_to_file(result, output_path + file_name)
+    try:
+        os.chmod(output_path + file_name, 0o666)
+    except:
+        pass
+
+
 if __name__ == '__main__':
     currencies = CurrencyPairs()
     currencies.add_pair('EUR', 'USD', 1.1326)
     currencies.add_pair('EUR', 'USDT', 1.1326)
 
     parser = KrakenCsvParser('EUR', currencies)
-    downloads_path = '/home/vsdev/Downloads/kraken/'
+    downloads_path = 'imports/kraken/'
     calculator = Calculator(parser.parse('%strades.csv' % downloads_path))
     print(calculator.positions())
     print('\n')
 
     result = calculator.calculate()
-    # result = list(filter(lambda x: x['position'].startswith('BTC'), result))
-    write_to_file(result, '%strades.pnl.csv' % downloads_path)
+    output_to_file(result, 'trades.pnl.csv')
     # result = list(filter(lambda x: x['position'] != 'test', result))
     print(*result, sep='\n')
     print('\n')
@@ -254,7 +271,7 @@ if __name__ == '__main__':
     result = list(filter(lambda x: x['profit'] != 0 or x['loss'] != 0, result))
     print(*result, sep='\n')
     print('\n')
-    write_to_file(result, '%strades.summary.csv' % downloads_path)
+    output_to_file(result, 'trades.summary.csv')
 
     print('Total profit:', round(sum(item['profit'] for item in result), 2))
     print('Total loss:', round(sum(item['loss'] for item in result), 2))
