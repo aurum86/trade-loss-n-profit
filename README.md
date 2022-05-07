@@ -13,3 +13,6 @@ Currently, supported reports:
 ```bash
 docker-compose -f docker/docker-compose.yml up
 ```
+4. Enjoy the output:
+* in Terminal
+* in csv files in `output` dir.
