@@ -70,6 +70,24 @@ class CurrencyPairs:
 
 
 class KrakenCsvParser(AbstractParser):
+    F_PAIR = 'pair'
+    F_COST = 'cost'
+    F_FEE = 'fee'
+    F_PRICE = 'price'
+    F_VOLUME = 'vol'
+    F_TIME = 'time'
+    F_TYPE = 'type'
+
+    FIELD_LIST = [
+        F_PAIR,
+        F_COST,
+        F_FEE,
+        F_PRICE,
+        F_VOLUME,
+        F_TIME,
+        F_TYPE,
+    ]
+
     def __init__(self, main_currency: str, currencies: CurrencyPairs) -> None:
         super().__init__()
         self.__main_currency: str = main_currency.upper()
@@ -78,17 +96,18 @@ class KrakenCsvParser(AbstractParser):
     def parse(self, file_path: str) -> list:
         import csv
         with open(file_path) as csv_file:
-            test = csv.reader(csv_file, delimiter=',')
+            test = csv.DictReader(csv_file, delimiter=',')
+            self.__validate_input_fields(list(test.fieldnames))
             for row in list(test)[1:]:
-                position = row[2]
+                position = row[self.F_PAIR]
 
-                price = float(row[6])
-                fee = float(row[8])
+                price = float(row[self.F_PRICE])
+                fee = float(row[self.F_FEE])
                 price_orig = price
                 fee_orig = fee
 
-                volume = float(row[9])
-                cost = float(row[7])
+                volume = float(row[self.F_VOLUME])
+                cost = float(row[self.F_COST])
                 volume = volume if price == 0 else cost / price
 
                 fiat_name = self.__get_fiat_name(position)
@@ -97,11 +116,16 @@ class KrakenCsvParser(AbstractParser):
                     fee = self.__currencies.convert(fiat_name, self.__main_currency, fee)
 
                 self._append(
-                    position, row[4], volume,
+                    position, row[self.F_TYPE], volume,
                     price, cost, fee,
-                    row[3]
+                    row[self.F_TIME]
                 )
         return self._get_data()
+
+    def __validate_input_fields(self, fields: list) -> None:
+        missing_fields = set(self.FIELD_LIST) - set(fields)
+        if missing_fields:
+            raise Exception(f'Missing required fields: {missing_fields}')
 
     def __get_fiat_name(self, position: str) -> Optional[str]:
         for name in self.__currencies.fiat_names():
