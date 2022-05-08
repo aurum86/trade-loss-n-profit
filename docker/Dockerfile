@@ -6,6 +6,7 @@ COPY requirements.txt /
 RUN python3 -m venv local-env
 RUN source local-env/bin/activate
 RUN pip install -r requirements.txt
+COPY source /source
 COPY main.py /.
 
-CMD [ "python", "./main.py" ]
+CMD [ "python", "main.py" ]
