@@ -2,11 +2,11 @@ from source.utils import unique
 
 
 class Calculator:
-    def __init__(self, items: list):
+    def __init__(self, items: list, ignore_negative_balance: bool = False):
         self.__items = items
         self.__result: list = []
         self.__verbose = False
-        self.__ignore_negative_balance = False
+        self.__ignore_negative_balance = ignore_negative_balance
 
     def positions(self) -> list:
         positions = unique([row['position'] for row in self.__items])
@@ -31,7 +31,7 @@ class Calculator:
                 loss += value if value and value < 0 else 0
 
             last_order = orders[-1]
-            pnl_list = list(filter(None, [order.get('cumulative profit') for order in orders]))
+            pnl_list = list(filter(None, [order.get('cumul. profit') for order in orders]))
             pnl = pnl_list[-1] if pnl_list else 0
             report.append({
                 'position': last_order['position'],
@@ -53,10 +53,8 @@ class Calculator:
             if orders:
                 pnl = self.__process(orders)
                 total_pnl += pnl
-                # print(f'Total pnl: {pnl} for {position}')
                 continue
-            raise Exception('No data')
-        # print(f'Grand total pnl: {total_pnl} for all positions')
+            raise Exception('No data to calculate')
         return self.__result
 
     def __process(self, orders: list) -> float:
@@ -64,8 +62,8 @@ class Calculator:
         pnl = 0
         for order in orders:
             order['profit'] = None
-            order['cumulative profit'] = None
-            order['remaining volume'] = order['volume']
+            order['cumul. profit'] = None
+            order['remain. volume'] = order['volume']
 
             if order['type'] == 'buy':
                 current_portfolio.append(order)
@@ -73,7 +71,7 @@ class Calculator:
                 previous_pnl = pnl
                 pnl = self.__process_sale(current_portfolio, order, pnl)
                 order['profit'] = pnl - previous_pnl
-                order['cumulative profit'] = round(pnl, 2)
+                order['cumul. profit'] = round(pnl, 2)
 
             self.__result.append(order)
         return pnl
@@ -86,13 +84,13 @@ class Calculator:
                 f'Processing sell order on {sell_order["date"]} for {sell_order_amount} shares at {sell_order_price} price')
         while sell_order_amount > 0:
             if not portfolio:
-                message = f"Trying to sell more shares than there are bought ones: {sell_order['position']} @ {sell_order['date']}"
+                message = f"Trying to sell more shares ({sell_order_amount}) than there are bought ones: {sell_order['position']} @ {sell_order['date']}"
                 if self.__ignore_negative_balance:
                     print(message)
-                else:
-                    # raise Exception(message)
                     break
-            buy_order_amount = portfolio[0]['remaining volume']
+                else:
+                    raise Exception(message)
+            buy_order_amount = portfolio[0]['remain. volume']
             buy_order_price = portfolio[0]['price']
             buy_order_date = portfolio[0]['date']
             price_difference = sell_order_price - buy_order_price
@@ -104,7 +102,7 @@ class Calculator:
                     f"Selling {sold_amount:.2f} of shares that were bought on {buy_order_date} @ {buy_order_price:.2f} at price {sell_order_price:.2f}, (price difference {price_difference:.2f}), total pnl {pnl:.2f}")
 
             if buy_order_amount > sold_amount:
-                portfolio[0]['remaining volume'] -= sold_amount
+                portfolio[0]['remain. volume'] -= sold_amount
             else:
                 portfolio.pop(0)
         return pnl

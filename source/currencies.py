@@ -20,7 +20,7 @@ class CurrencyPairs:
 
     def convert(self, from_currency, to_currency: str, amount: float) -> float:
         if amount == 0 or from_currency == to_currency:
-            return amount
+            return round(amount, 2)
 
         for pair in self.__pairs:
             if pair['currency1'] == from_currency and pair['currency2'] == to_currency:
