@@ -23,7 +23,7 @@ class AbstractParser:
             'position': position,
             'type': operation,
             'volume': volume,
-            'price wo fee': abs(price - fee if operation == 'buy' else fee - price),
+            'price wo fee': round(abs(price - fee if operation == 'buy' else fee - price), 2),
             'price': price,
             'cost': cost,
             'fee': fee,
@@ -71,9 +71,12 @@ class KrakenCsvParser(AbstractParser):
 
                 volume = float(row[self.F_VOLUME])
                 cost = float(row[self.F_COST])
-                volume = volume if price == 0 else cost / price
+                try:
+                    volume = cost / price if price == 0 else volume
+                except:
+                    print(f'Division by zero problem: {row}')
 
-                fiat_name = self.__get_fiat_name(position)
+                fiat_name = self.__find_fiat_name(position)
                 if fiat_name:
                     price = self.__currencies.convert(fiat_name, self.__main_currency, price)
                     fee = self.__currencies.convert(fiat_name, self.__main_currency, fee)
@@ -90,10 +93,9 @@ class KrakenCsvParser(AbstractParser):
         if missing_fields:
             raise Exception(f'Missing required fields: {missing_fields}')
 
-    def __get_fiat_name(self, position: str) -> Optional[str]:
+    def __find_fiat_name(self, position: str) -> Optional[str]:
         for name in self.__currencies.fiat_names():
             if position.endswith(name):
                 return name
         else:
             return None
-            # raise Exception(f'Fiat name not found by pair: {position}')
