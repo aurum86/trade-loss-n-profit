@@ -184,3 +184,23 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"❌ Error on {ledger_id}: {e}")
             continue
+
+    partial_results = load_partial_results(ledger_type)
+    df = pd.DataFrame(partial_results)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df = df.sort_values(by='timestamp')
+    df["value_eur"] = df["value_eur"].round(2)
+    df["eur_rate"] = df["eur_rate"].round(5)
+
+    df['year'] = df['timestamp'].dt.year
+
+    for year, group in df.groupby('year'):
+        filename = f"report_in_eur_{ledger_type}_{year}.csv.csv"
+        group.to_csv(filename, index=False)
+        print(f"✅ Saved {filename}")
+        print(f"💰 Total sum (EUR): {group['value_eur'].sum():.2f}")
+
+    df.to_csv(f"report_in_eur_{ledger_type}.csv", index=False)
+
+    print(f"\n✅ CSV saved as 'staking_income_eur.csv'")
+    print(f"💰 Total sum (EUR): {df['value_eur'].sum():.2f}")
