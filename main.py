@@ -130,41 +130,57 @@ if __name__ == '__main__':
     ledger_type = "staking"
     load_asset_pair_cache()
     partial_results = load_partial_results(ledger_type)
-    done_ids = {entry["id"] for entry in partial_results}
+    done_ids = {entry["refid"] for entry in partial_results}
 
     staking_data = get_ledgers(ledger_type)
     records = []
 
+    print(f"{len(done_ids)} out of {len(staking_data)} is calculated")
+
+    dot_counter = 0
     for entry in staking_data:
-        print(".", end='')
+        print(".", end="", flush=True)
+        dot_counter += 1
+        if dot_counter % 100 == 0:
+            print(f"{dot_counter}")
+
+        ledger_id = entry['refid']
+        if ledger_id in done_ids:
+            continue  # Already processed
+
         asset = entry['asset']
         amount = float(entry['amount'])
         timestamp = int(entry['time'])
         dt = datetime.utcfromtimestamp(timestamp)
 
-        if asset == 'ZEUR' or asset == 'EUR':
-            eur_rate = 1.0
-        else:
-            pair = get_asset_pair_for_eur(asset)
-            if not pair:
-                print(f"⚠️ No EUR pair found for asset {asset}")
-                continue
+        try:
+            if asset in ['ZEUR', 'EUR']:
+                eur_rate = 1.0
+            else:
+                pair = get_asset_pair_for_eur(asset)
+                if not pair:
+                    print(f"⚠️ No EUR pair for asset: {asset}")
+                    continue
+                eur_rate = get_price(pair, timestamp)
+                if eur_rate is None:
+                    print(f"⚠️ No price data for {pair} at {dt}")
+                    continue
+                time.sleep(1.2)
 
-            eur_rate = get_price(pair, timestamp)
-            time.sleep(1.2)
+            eur_value = amount * eur_rate if eur_rate else None
 
-        eur_value = amount * eur_rate if eur_rate else None
+            record = {
+                'refid': ledger_id,
+                'timestamp': dt.isoformat(),
+                'asset': asset,
+                'amount': amount,
+                'eur_rate': eur_rate,
+                'value_eur': eur_value
+            }
 
-        records.append({
-            'timestamp': dt,
-            'asset': asset,
-            'amount': amount,
-            'eur_rate': eur_rate,
-            'value_eur': eur_value
-        })
+            partial_results.append(record)
+            save_partial_results(ledger_type, partial_results)
 
-    # 💾 Išsaugome CSV
-    df = pd.DataFrame(records)
-    df.to_csv("staking_is_kraken_api.csv", index=False)
-
-    print(f"💰 Bendra staking pajamų suma (EUR): {df['value_eur'].sum():.2f}")
+        except Exception as e:
+            print(f"❌ Error on {ledger_id}: {e}")
+            continue
