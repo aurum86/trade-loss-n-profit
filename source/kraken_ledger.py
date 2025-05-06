@@ -16,6 +16,7 @@ class KrakenLedger:
             return float(ohlc_data[0][4])
         except Exception as e:
             print(f"Error fetching price for {pair} at {datetime.utcfromtimestamp(timestamp)}: {e}")
+            print(url)
             return None
 
     def fetch_history(self, ledger_type, offset):

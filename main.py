@@ -6,13 +6,17 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from source.api_kraken import KrakenApi
+from source.inventory_calculator import InventoryCalculator
 from source.ledger_cache import *
 from source.currencies import *
 from source.results_cache import *
 from source.kraken_ledger import KrakenLedger
 from source.transactions import Transactions
 
-cached_results = ResultsCache("output")
+dir_output = 'output'
+dir_cache = os.path.join(dir_output, 'kraken_ledger_cache')
+
+cached_results = ResultsCache(dir_cache)
 
 def format_results(ledger_type):
     partial_results = cached_results.load_partial_results(ledger_type)
@@ -26,16 +30,15 @@ def format_results(ledger_type):
     return df
 
 
-def generate_output(df):
-    global year
+def generate_staking_output(df):
     for year, group in df.groupby('year'):
-        filename = f"report_in_eur_{ledger_type}_{year}.csv.csv"
-        group.to_csv(os.path.join("output", filename), index=False)
+        filename = f"report_in_eur_{ledger_type}_{year}.csv"
+        group.to_csv(os.path.join(dir_output, filename), index=False)
         print(f"✅ Saved {filename}")
-        print(f"💰 Total sum (EUR): {group['value_eur'].sum():.2f}")
+        print(f"💰 Total gain sum (EUR): {group['value_eur'].sum():.2f}")
 
-    df.to_csv(os.path.join("output", f"report_in_eur_{ledger_type}.csv"), index=False)
-    print(f"💰 Total sum (EUR): {df['value_eur'].sum():.2f}")
+    df.to_csv(os.path.join(dir_output, f"report_in_eur_{ledger_type}.csv"), index=False)
+    print(f"💰 Total gain sum (EUR): {df['value_eur'].sum():.2f}")
 
 
 def parse_entry(entry):
@@ -61,7 +64,7 @@ def parse_entry(entry):
     )
 
 
-def get_rate_in_eur(ledger_type, pair, asset):
+def get_rate_in_eur(ledger_type, pair, asset, timestamp):
     if ledger_type == "staking":
         if asset in ['ZEUR', 'EUR']:
             result = 1.0
@@ -72,7 +75,7 @@ def get_rate_in_eur(ledger_type, pair, asset):
                 return None
             result = kraken_ledger.get_price(pair, timestamp)
             if result is None:
-                print(f"⚠️ No price data for {pair} at {dt}")
+                print(f"⚠️ No price data for {pair} at {datetime.utcfromtimestamp(timestamp)}")
                 return None
             time.sleep(1.2)
     else:
@@ -81,36 +84,9 @@ def get_rate_in_eur(ledger_type, pair, asset):
     return result
 
 
-if __name__ == '__main__':
-
-    load_dotenv()
-
-    force_update = True
-    # force_update = False
-
-    # ledger_type = "staking"
-    ledger_type = "trading"
-
-    cached_ledger = LedgerCache("output")
-    cached_asset_pairs = AssetPairs("output")
-
-    if not os.getenv("API_KEY") or not os.getenv("API_SECRET"):
-        raise ValueError("API_KEY or API_SECRET not set in .env file")
-
-    kraken_api = KrakenApi(os.getenv("API_KEY"), os.getenv("API_SECRET"))
-    kraken_ledger = KrakenLedger(kraken_api)
-    transactions = Transactions(cached_ledger, kraken_ledger)
-    cached_asset_pairs.load_asset_pair_cache()
-    partial_results_list = cached_results.load_partial_results(ledger_type)
-    partial_results = {
-        entry["refid"]: entry for entry in partial_results_list
-    }
-    done_ids = set(partial_results.keys())
-
-    staking_data = transactions.get_ledgers(ledger_type)
-    records = []
-
-    print(f"{len(done_ids)} out of {len(staking_data)} is calculated")
+def generate_transaction_history(done_ids, staking_data):
+    if not force_update:
+        return
 
     dot_counter = 0
     for entry in staking_data:
@@ -133,20 +109,24 @@ if __name__ == '__main__':
             if force_update and bool(partial_results):
                 _partial_result = partial_results.get(ledger_id, None)
                 if _partial_result is None:
-                    eur_rate = get_rate_in_eur(ledger_type, pair, asset)
+                    eur_rate = get_rate_in_eur(ledger_type, pair, asset, timestamp)
                 else:
                     eur_rate = _partial_result['eur_rate']
             else:
-                eur_rate = get_rate_in_eur(ledger_type, pair, asset)
+                eur_rate = get_rate_in_eur(ledger_type, pair, asset, timestamp)
             if eur_rate is None:
                 continue
 
             eur_value = amount * eur_rate if eur_rate else None
+            if entry['type'] == 'sell':
+                amount *= -1
 
             record = {
                 'refid': ledger_id,
                 'timestamp': dt.isoformat(),
                 'asset': asset,
+                'pair': pair,
+                'entity': asset if ledger_type == 'staking' else pair,
                 'amount': amount,
                 'eur_rate': eur_rate,
                 'value_eur': eur_value,
@@ -160,5 +140,73 @@ if __name__ == '__main__':
             print(f"❌ Error on {ledger_id}: {e}")
             continue
 
+
+def generate_taxable_events(df) -> InventoryCalculator:
+    calc = InventoryCalculator()
+    df = df.sort_values(by=['entity', 'timestamp'])
+    for _, row in df.iterrows():
+        if row['amount'] > 0:
+            calc.add_purchase(
+                asset=row['entry']['pair'],
+                amount=row['amount'],
+                price_eur=row['eur_rate'],
+                timestamp=row['timestamp']
+            )
+        else:
+            calc.process_sale(
+                asset=row['entry']['pair'],
+                amount_sold=abs(row['amount']),
+                sell_price_eur=row['eur_rate'],
+                timestamp=row['timestamp']
+            )
+    return calc
+
+
+def generate_taxable_output(df_tax):
+    df_tax['year'] = df_tax['sell_timestamp'].dt.year
+    for year, group in df_tax.groupby('year'):
+        filename = f"report_in_eur_{ledger_type}_{year}.csv"
+        group.to_csv(os.path.join(dir_output, filename), index=False)
+        print(f"✅ Saved {filename}")
+        print(f"💰 Total gain sum (EUR): {group['gain_eur'].sum():.2f}")
+    df_tax.to_csv(os.path.join(dir_output, f"report_in_eur_{ledger_type}.csv"), index=False)
+    print(f"💰 Total gain sum (EUR): {df_tax['gain_eur'].sum():.2f}")
+
+
+if __name__ == '__main__':
+
+    load_dotenv()
+
+    # force_update = True
+    force_update = False
+
+    # ledger_type = "staking"
+    ledger_type = "trading"
+
+    cached_ledger = LedgerCache(dir_cache)
+    cached_asset_pairs = AssetPairs(dir_cache)
+
+    if not os.getenv("API_KEY") or not os.getenv("API_SECRET"):
+        raise ValueError("API_KEY or API_SECRET not set in .env file")
+
+    kraken_api = KrakenApi(os.getenv("API_KEY"), os.getenv("API_SECRET"))
+    kraken_ledger = KrakenLedger(kraken_api)
+    transactions = Transactions(cached_ledger, kraken_ledger)
+    cached_asset_pairs.load_asset_pair_cache()
+    partial_results_list = cached_results.load_partial_results(ledger_type)
+    partial_results = {
+        entry["refid"]: entry for entry in partial_results_list
+    }
+    done_ids = set(partial_results.keys())
+    staking_data = transactions.get_ledgers(ledger_type)
+    print(f"{len(done_ids)} out of {len(staking_data)} is calculated")
+    generate_transaction_history(done_ids, staking_data)
     df = format_results(ledger_type)
-    generate_output(df)
+
+    if ledger_type == 'trading':
+        calc = generate_taxable_events(df)
+        df_tax = pd.DataFrame(calc.get_taxable_events())
+        generate_taxable_output(df_tax)
+
+    if ledger_type == 'staking':
+        generate_staking_output(df)

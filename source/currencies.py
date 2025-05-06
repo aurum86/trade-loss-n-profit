@@ -6,17 +6,14 @@ ASSET_PAIR_CACHE_FILE = "asset_pair_cache.json"
 import json
 import os
 
-CACHE_DIR = "kraken_ledger_cache"
-
 class AssetPairs:
     def __init__(self, directory):
         self.__dir = directory
         self.__cache = {}
 
     def __get_cache_file_path(self):
-        path = os.path.join(self.__dir, CACHE_DIR)
-        os.makedirs(path, exist_ok=True)
-        return os.path.join(path, ASSET_PAIR_CACHE_FILE)
+        os.makedirs(self.__dir, exist_ok=True)
+        return os.path.join(self.__dir, ASSET_PAIR_CACHE_FILE)
 
     def load_asset_pair_cache(self):
         file_path = self.__get_cache_file_path()
