@@ -1,16 +1,26 @@
 import json
 import os
 
-def get_partial_cache_file_path(ledger_type):
-    # os.makedirs(CACHE_DIR, exist_ok=True)
-    return os.path.join("", f"staking_partial_results_{ledger_type}.json")
+CACHE_DIR = "kraken_ledger_cache"
 
-def load_partial_results(ledger_type):
-    if os.path.exists(get_partial_cache_file_path(ledger_type)):
-        with open(get_partial_cache_file_path(ledger_type), "r") as f:
-            return json.load(f)
-    return []
+class ResultsCache:
+    def __init__(self, directory):
+        self.__dir = directory
 
-def save_partial_results(ledger_type, data):
-    with open(get_partial_cache_file_path(ledger_type), "w") as f:
-        json.dump(data, f, indent=2)
+    def __get_partial_cache_file_path(self, ledger_type):
+        path = os.path.join(self.__dir, CACHE_DIR)
+        os.makedirs(path, exist_ok=True)
+        return os.path.join(path, f"partial_results_{ledger_type}.json")
+
+    def load_partial_results(self, ledger_type):
+        file_path = self.__get_partial_cache_file_path(ledger_type)
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                if os.path.getsize(file_path) == 0:
+                    return []
+                return json.load(f)
+        return []
+
+    def save_partial_results(self, ledger_type, data):
+        with open(self.__get_partial_cache_file_path(ledger_type), "w") as f:
+            json.dump(data, f, indent=2)

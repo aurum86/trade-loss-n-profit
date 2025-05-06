@@ -2,45 +2,56 @@ from source.utils import unique
 import requests
 
 ASSET_PAIR_CACHE_FILE = "asset_pair_cache.json"
-_asset_pair_cache = {}
 
 import json
 import os
 
-def load_asset_pair_cache():
-    global _asset_pair_cache
-    if os.path.exists(ASSET_PAIR_CACHE_FILE):
-        with open(ASSET_PAIR_CACHE_FILE, "r") as f:
-            _asset_pair_cache = json.load(f)
+CACHE_DIR = "kraken_ledger_cache"
 
-def save_asset_pair_cache():
-    with open(ASSET_PAIR_CACHE_FILE, "w") as f:
-        json.dump(_asset_pair_cache, f, indent=2)
+class AssetPairs:
+    def __init__(self, directory):
+        self.__dir = directory
+        self.__cache = {}
 
-def get_asset_pair_for_eur(asset):
-    global _asset_pair_cache
-    normalized_asset = asset.replace(".S", "")  # Handle staked assets like DOT.S
+    def __get_cache_file_path(self):
+        path = os.path.join(self.__dir, CACHE_DIR)
+        os.makedirs(path, exist_ok=True)
+        return os.path.join(path, ASSET_PAIR_CACHE_FILE)
 
-    # Return from cache if present
-    if normalized_asset in _asset_pair_cache:
-        return _asset_pair_cache[normalized_asset]
+    def load_asset_pair_cache(self):
+        file_path = self.__get_cache_file_path()
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                self.__cache = json.load(f)
 
-    # Fetch pairs from Kraken
-    url = "https://api.kraken.com/0/public/AssetPairs"
-    resp = requests.get(url).json()
-    pairs = resp.get("result", {})
+    def save_asset_pair_cache(self):
+        file_path = self.__get_cache_file_path()
+        with open(file_path, "w") as f:
+            json.dump(self.__cache, f, indent=2)
 
-    for pair_name, pair_info in pairs.items():
-        base = pair_info.get("base", "").replace("X", "").replace("Z", "")
-        quote = pair_info.get("quote", "").replace("X", "").replace("Z", "")
-        if base == normalized_asset and quote == "EUR":
-            _asset_pair_cache[normalized_asset] = pair_name
-            save_asset_pair_cache()
-            return pair_name
+    def get_asset_pair_for_eur(self, asset):
+        normalized_asset = asset.replace(".S", "")  # Handle staked assets like DOT.S
 
-    _asset_pair_cache[normalized_asset] = None
-    save_asset_pair_cache()
-    return None
+        # Return from cache if present
+        if normalized_asset in self.__cache:
+            return self.__cache[normalized_asset]
+
+        # Fetch pairs from Kraken
+        url = "https://api.kraken.com/0/public/AssetPairs"
+        resp = requests.get(url).json()
+        pairs = resp.get("result", {})
+
+        for pair_name, pair_info in pairs.items():
+            base = pair_info.get("base", "").replace("X", "").replace("Z", "")
+            quote = pair_info.get("quote", "").replace("X", "").replace("Z", "")
+            if base == normalized_asset and quote == "EUR":
+                self.__cache[normalized_asset] = pair_name
+                self.save_asset_pair_cache()
+                return pair_name
+
+        self.__cache[normalized_asset] = None
+        self.save_asset_pair_cache()
+        return None
 
 
 
